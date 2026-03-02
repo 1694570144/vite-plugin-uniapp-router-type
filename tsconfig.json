@@ -1,0 +1,12 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "node", // 必须是 node，否则找不到 node_modules 里的类型
+    "esModuleInterop": true, // 允许使用 import fs from 'fs' 这种方式导入 CommonJS 模块
+    "strict": true,
+    "skipLibCheck": true,
+    "types": ["node"] // 显式声明包含 node 类型
+  },
+  "include": ["src"]
+}
