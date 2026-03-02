@@ -26,8 +26,13 @@ export default function uniappRouterType(
     try {
       if (!fs.existsSync(fullPagesJsonPath)) return;
       const content = fs.readFileSync(fullPagesJsonPath, "utf-8");
-      // 简单移除注释并解析
-      const pagesJson = JSON.parse(content.replace(/\/\/.*/g, ""));
+
+      // 增强型正则：移除单行注释 // 和多行注释 /* */
+      const jsonStr = content
+        .replace(/\/\/.*/g, "")
+        .replace(/\/\*[\s\S]*?\*\//g, "");
+
+      const pagesJson = JSON.parse(jsonStr);
       const routes: string[] = [];
 
       pagesJson.pages?.forEach((p: any) => routes.push(`/${p.path}`));
@@ -58,7 +63,6 @@ declare global {
 }
 `;
 
-      // 只有内容真的变化了才写入
       if (
         fs.existsSync(fullOutputPath) &&
         fs.readFileSync(fullOutputPath, "utf-8") === template
@@ -67,32 +71,29 @@ declare global {
       }
 
       fs.writeFileSync(fullOutputPath, template);
-      console.log("✅ [Router Type] 类型定义已实时同步");
+      console.log("✅ [Router Type] 路由类型已自动同步");
     } catch (e) {
-      // 避免 JSON 解析一半时的报错导致进程崩溃
+      // 解析中可能产生异常，忽略它以保证进程不挂掉
     }
   };
 
+  // --- 关键修改：手动物理监听 ---
+  // 使用 Node.js 原生的 watch，不依赖 Vite 的 server 生命周期
+  if (fs.existsSync(fullPagesJsonPath)) {
+    // 监听 pages.json 所在的文件系统事件
+    fs.watch(fullPagesJsonPath, (eventType) => {
+      if (eventType === "change") {
+        generate();
+      }
+    });
+  }
+
   return {
     name: "vite-plugin-uniapp-router-type",
-
-    // 1. 启动时生成
-    configResolved: generate,
-
-    // 2. 针对 CLI 模式的底层监听
+    configResolved: generate, // 确保启动时生成
+    // 依然保留此配置，作为双重保险
     configureServer(server) {
-      // 使用 Vite 内部集成的 chokidar 实例
-      // 这样可以确保即使 UniApp 拦截了 HMR，底层文件系统的变化依然能被捕捉
       server.watcher.add(fullPagesJsonPath);
-
-      server.watcher.on("all", (event, filePath) => {
-        // 统一斜杠格式，匹配路径
-        if (path.resolve(filePath) === fullPagesJsonPath) {
-          if (event === "change" || event === "add") {
-            generate();
-          }
-        }
-      });
     },
   };
 }

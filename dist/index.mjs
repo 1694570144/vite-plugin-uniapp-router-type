@@ -15,9 +15,7 @@ function uniappRouterType(options = {}) {
     try {
       if (!fs.existsSync(fullPagesJsonPath)) return;
       const content = fs.readFileSync(fullPagesJsonPath, "utf-8");
-      const pagesJson = JSON.parse(
-        content.replace(/\/\/.*/g, "").replace(/,(\s*[\}\]] baby)/g, "$1")
-      );
+      const pagesJson = JSON.parse(content.replace(/\/\/.*/g, ""));
       const routes = [];
       pagesJson.pages?.forEach((p) => routes.push(`/${p.path}`));
       pagesJson.subPackages?.forEach((sub) => {
@@ -47,28 +45,24 @@ declare global {
         return;
       }
       fs.writeFileSync(fullOutputPath, template);
-      console.log("\u2705 [Router Type] Generated successfully.");
+      console.log("\u2705 [Router Type] \u7C7B\u578B\u5B9A\u4E49\u5DF2\u5B9E\u65F6\u540C\u6B65");
     } catch (e) {
-      console.error("\u274C [Router Type] Generate failed:", e);
     }
   };
   return {
     name: "vite-plugin-uniapp-router-type",
     // 1. 启动时生成
     configResolved: generate,
-    // 2. 核心：确保 Vite 监听到 pages.json 的变化
+    // 2. 针对 CLI 模式的底层监听
     configureServer(server) {
       server.watcher.add(fullPagesJsonPath);
-      server.watcher.on("add", (file) => {
-        if (file === fullPagesJsonPath) generate();
+      server.watcher.on("all", (event, filePath) => {
+        if (path.resolve(filePath) === fullPagesJsonPath) {
+          if (event === "change" || event === "add") {
+            generate();
+          }
+        }
       });
-    },
-    // 3. 热更新处理
-    handleHotUpdate({ file, server }) {
-      if (file.replace(/\\/g, "/").endsWith(pagesJsonPath)) {
-        generate();
-        server.ws.send({ type: "full-reload" });
-      }
     }
   };
 }
