@@ -27,7 +27,7 @@ export default function uniappRouterType(
       if (!fs.existsSync(fullPagesJsonPath)) return;
       const content = fs.readFileSync(fullPagesJsonPath, "utf-8");
 
-      // 增强型正则：移除单行注释 // 和多行注释 /* */
+      // 安全移除注释
       const jsonStr = content
         .replace(/\/\/.*/g, "")
         .replace(/\/\*[\s\S]*?\*\//g, "");
@@ -35,10 +35,28 @@ export default function uniappRouterType(
       const pagesJson = JSON.parse(jsonStr);
       const routes: string[] = [];
 
-      pagesJson.pages?.forEach((p: any) => routes.push(`/${p.path}`));
-      pagesJson.subPackages?.forEach((sub: any) => {
-        sub.pages?.forEach((p: any) => routes.push(`/${sub.root}/${p.path}`));
-      });
+      // 提取主包路径
+      if (Array.isArray(pagesJson.pages)) {
+        pagesJson.pages.forEach((p: any) => {
+          if (p.path) routes.push(`/${p.path}`);
+        });
+      }
+
+      // 提取分包路径 (修复核心)
+      if (Array.isArray(pagesJson.subPackages)) {
+        pagesJson.subPackages.forEach((sub: any) => {
+          const subRoot = sub.root;
+          if (Array.isArray(sub.pages)) {
+            sub.pages.forEach((p: any) => {
+              if (p.path) {
+                // 确保生成格式为 /root/path
+                const fullPath = `/${subRoot}/${p.path}`.replace(/\/+/g, "/");
+                routes.push(fullPath);
+              }
+            });
+          }
+        });
+      }
 
       if (!fs.existsSync(fullOutputDir)) {
         fs.mkdirSync(fullOutputDir, { recursive: true });
@@ -71,27 +89,22 @@ declare global {
       }
 
       fs.writeFileSync(fullOutputPath, template);
-      console.log("✅ [Router Type] 路由类型已自动同步");
+      console.log(`✅ [Router Type] 已同步 ${routes.length} 条路由`);
     } catch (e) {
-      // 解析中可能产生异常，忽略它以保证进程不挂掉
+      // 捕获异常
     }
   };
 
-  // --- 关键修改：手动物理监听 ---
-  // 使用 Node.js 原生的 watch，不依赖 Vite 的 server 生命周期
+  // 物理文件监听器
   if (fs.existsSync(fullPagesJsonPath)) {
-    // 监听 pages.json 所在的文件系统事件
-    fs.watch(fullPagesJsonPath, (eventType) => {
-      if (eventType === "change") {
-        generate();
-      }
+    fs.watch(fullPagesJsonPath, (event) => {
+      if (event === "change") generate();
     });
   }
 
   return {
     name: "vite-plugin-uniapp-router-type",
-    configResolved: generate, // 确保启动时生成
-    // 依然保留此配置，作为双重保险
+    configResolved: generate,
     configureServer(server) {
       server.watcher.add(fullPagesJsonPath);
     },

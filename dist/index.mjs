@@ -15,7 +15,8 @@ function uniappRouterType(options = {}) {
     try {
       if (!fs.existsSync(fullPagesJsonPath)) return;
       const content = fs.readFileSync(fullPagesJsonPath, "utf-8");
-      const pagesJson = JSON.parse(content.replace(/\/\/.*/g, ""));
+      const jsonStr = content.replace(/\/\/.*/g, "").replace(/\/\*[\s\S]*?\*\//g, "");
+      const pagesJson = JSON.parse(jsonStr);
       const routes = [];
       pagesJson.pages?.forEach((p) => routes.push(`/${p.path}`));
       pagesJson.subPackages?.forEach((sub) => {
@@ -45,24 +46,24 @@ declare global {
         return;
       }
       fs.writeFileSync(fullOutputPath, template);
-      console.log("\u2705 [Router Type] \u7C7B\u578B\u5B9A\u4E49\u5DF2\u5B9E\u65F6\u540C\u6B65");
+      console.log("\u2705 [Router Type] \u8DEF\u7531\u7C7B\u578B\u5DF2\u81EA\u52A8\u540C\u6B65");
     } catch (e) {
     }
   };
+  if (fs.existsSync(fullPagesJsonPath)) {
+    fs.watch(fullPagesJsonPath, (eventType) => {
+      if (eventType === "change") {
+        generate();
+      }
+    });
+  }
   return {
     name: "vite-plugin-uniapp-router-type",
-    // 1. 启动时生成
     configResolved: generate,
-    // 2. 针对 CLI 模式的底层监听
+    // 确保启动时生成
+    // 依然保留此配置，作为双重保险
     configureServer(server) {
       server.watcher.add(fullPagesJsonPath);
-      server.watcher.on("all", (event, filePath) => {
-        if (path.resolve(filePath) === fullPagesJsonPath) {
-          if (event === "change" || event === "add") {
-            generate();
-          }
-        }
-      });
     }
   };
 }
